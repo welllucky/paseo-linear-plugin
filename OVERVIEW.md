@@ -1,4 +1,4 @@
-Linear dashboard is a reduced, interactive Linear client inside Paseo. It opens from a sidebar item as a full screen, and as a panel in a workspace tab or in the right-side Explorer. It shows open-issue totals, counts by state, priority and assignee, team and project filters, and the 25 most recently updated issues. Selecting an issue shows its description, state, priority, assignee, team, project, dates, recent activity, comments and attachments inline, and lets you change the state, priority, assignee, title and description.
+Linear dashboard is a reduced, interactive Linear client inside Paseo. It opens from a sidebar item as a full screen, and as a panel in a workspace tab or in the right-side Explorer. It shows open-issue totals, counts by state, priority and assignee, team and project filters, and the 25 most recently updated issues. In a workspace or Explorer panel it shows which Linear project the local project is linked to, with Link, Change and Unlink, and filters the list to that project automatically; without a link the manual filters apply. Selecting an issue shows its description, state, priority, assignee, team, project, dates, recent activity, comments and attachments inline, and lets you change the state, priority, assignee, title and description.
 
 ## Setup
 
@@ -9,6 +9,8 @@ Requires Paseo 0.11.0 or later and the Enable plugins switch turned on. It runs 
 ## Permissions
 
 The daemon sends GraphQL requests to `https://api.linear.app/graphql` using the key: queries for issues, teams, projects, comments and attachments, and the `issueUpdate` mutation when you change a field. The saved key is a file readable only by the daemon user, stored as plain text. The app sends it once on Save and afterwards only learns whether a key is set; it is never returned, logged or shown in errors. The plugin never creates or deletes issues and never edits comments, and it has no bulk actions. What Linear allows is decided by the key.
+
+The links are saved as host-scoped plugin settings, keyed by project root path, and hold only project ids and names.
 
 ## Limits
 

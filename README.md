@@ -56,11 +56,23 @@ Without a key the view shows setup instructions.
 
 ## Use
 
-Open Linear from the sidebar item, or add the Linear panel as a tab in a workspace or in the Explorer on the right. The Explorer and tab panel use the stacked layout: the list first, then the selected issue with a Back button. The full screen loads when it opens and again when you press Refresh. There is no polling or background sync.
+Open Linear from the sidebar item, or add the Linear panel as a tab in a workspace or in the Explorer on the right. The Explorer and tab panel use the stacked layout: a compact header, the workspace link, filters and an open-issue summary (a state bar plus priority and assignee lines), then a dense issue list. Selecting an issue replaces the list with the issue and a Back button. The full screen loads when it opens and again when you press Refresh. There is no polling or background sync.
 
-- **Summary:** the number of open issues and counts by state, priority and assignee.
+- **Summary:** the number of open issues, a proportional bar by state, and counts by priority and assignee. A colored edge on a row marks Urgent and High issues.
 - **Teams and projects:** pick a team or project to narrow the summary and the issue list.
 - **Issue list:** the 25 most recently updated open issues. Select one to see it next to the list, or in place of it on narrow screens.
+
+## Link a workspace to a Linear project
+
+In the workspace or Explorer panel, the top of the view shows the local project (its name and root path) and the Linear project it is linked to.
+
+- **Link** opens a searchable list of your Linear projects. Pick one to link the current workspace's project root to it.
+- **Change** picks a different project. **Unlink** removes the link.
+- While a link exists, the summary and issue list are filtered to that project automatically, and the manual project chips are hidden. The team filter still works.
+- Without a link, the manual team and project filters work as before.
+- If the linked project no longer exists in Linear, the bar says so, the link is not applied, and the manual filter stays in force until you change or remove it.
+
+Links are stored as plugin settings scoped to the daemon host, keyed by the project root path, so every Paseo client connected to that daemon sees the same links. Only the Linear project id and name and the local project name are stored, never the API key. Workspaces that share a project root share a link. The full-screen Linear view is not tied to a workspace and never applies a link.
 
 ## Interactive features
 
