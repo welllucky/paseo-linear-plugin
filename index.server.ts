@@ -10,8 +10,10 @@ import {
   saveTokenRpc,
   updateIssueRpc,
 } from "./shared/dashboard";
+import { workspaceLinks } from "./shared/links";
 
 export default function contribute(server: PluginServerContext) {
+  server.registerSettings(workspaceLinks);
   server.handle(getDashboardRpc, handlers.getDashboard);
   server.handle(getCatalogRpc, handlers.getCatalog);
   server.handle(getIssueRpc, handlers.getIssue);

@@ -6,6 +6,7 @@ import type {
 } from "@getpaseo/plugin/client";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
 import { DashboardView } from "./client/dashboard";
+import { WorkspacePanel } from "./client/panel";
 import { SettingsScreen } from "./client/settings";
 import { DASHBOARD_PANEL, DASHBOARD_SCREEN, SETTINGS_SCREEN } from "./shared/surfaces";
 
@@ -26,15 +27,8 @@ export default function contribute(client: PluginClientContext) {
     return <DashboardView theme={theme} layout={layout} onOpenSettings={openSettings} />;
   }
 
-  // The Explorer column is narrow, so the panel always uses the stacked layout.
-  function DashboardPanel({ theme, layout }: PluginWorkspacePanelProps) {
-    return (
-      <DashboardView
-        theme={theme}
-        layout={{ ...layout, compact: true }}
-        onOpenSettings={openSettings}
-      />
-    );
+  function DashboardPanel(props: PluginWorkspacePanelProps) {
+    return <WorkspacePanel {...props} onOpenSettings={openSettings} />;
   }
 
   const removers = [
