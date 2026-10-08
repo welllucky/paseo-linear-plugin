@@ -22,27 +22,28 @@ function setup(env: NodeJS.ProcessEnv, request: typeof fetch) {
   return { credentials, ...createHandlers({ credentials, request }) };
 }
 
-const catalogResponse = {
-  data: {
-    teams: {
-      nodes: [
-        {
-          id: "t1",
-          key: "ENG",
-          name: "Eng",
-          states: { nodes: [{ id: "s1", name: "Todo", type: "unstarted" }] },
-          members: {
-            nodes: [
-              { id: "u2", name: "Zed" },
-              { id: "u1", name: "Ana" },
-            ],
-          },
+const page = <T>(nodes: T[]) => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
+
+function respondToCatalog(call: { query: string }) {
+  if (call.query.includes("PaseoLinearTeams")) {
+    return { data: { teams: page([{ id: "t1", key: "ENG", name: "Eng" }]) } };
+  }
+  if (call.query.includes("PaseoLinearTeamDetail")) {
+    return {
+      data: {
+        team: {
+          states: page([{ id: "s1", name: "Todo", type: "unstarted" }]),
+          members: page([
+            { id: "u2", name: "Zed" },
+            { id: "u1", name: "Ana" },
+          ]),
+          projects: page([{ id: "p1", name: "Proj" }]),
         },
-      ],
-    },
-    projects: { nodes: [{ id: "p1", name: "Proj", teams: { nodes: [{ id: "t1" }] } }] },
-  },
-};
+      },
+    };
+  }
+  return { data: { issue: detail() } };
+}
 
 test("handlers report not_configured without calling Linear", async () => {
   const { calls, request } = mockFetch(() => ({}));
@@ -54,9 +55,7 @@ test("handlers report not_configured without calling Linear", async () => {
 });
 
 test("handlers return catalog and issue detail", async () => {
-  const { request } = mockFetch((call) =>
-    call.query.includes("PaseoLinearCatalog") ? catalogResponse : { data: { issue: detail() } },
-  );
+  const { request } = mockFetch(respondToCatalog);
   const h = setup({ LINEAR_API_KEY: SECRET }, request);
   const catalog = await h.getCatalog();
   assert.equal(catalog.status, "ready");

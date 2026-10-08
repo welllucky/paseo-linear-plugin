@@ -15,7 +15,7 @@ The daemon sends GraphQL requests to `https://api.linear.app/graphql` using the 
 - Only open issues are counted, meaning every state except completed and canceled.
 - At most 500 issues are read per refresh, the most recently updated first. When more exist, the total is shown with a plus sign and a note.
 - Data loads when the screen opens and when you press Refresh. There is no background sync or polling.
-- Teams, projects, states and members load up to 100 entries each. Comments and attachments load up to 50 each, and the screen says when more exist.
+- Teams, projects, states and members load up to 500 entries each. Comments and attachments load up to 50 each, and the screen says when more exist.
 - Assignee choices are the members of the issue's team.
 - Attachments with a non-http(s) address are listed but cannot be opened.
 - Activity lists up to 25 recent status, priority, assignee and title changes. Comments are read-only; there is no file upload or issue creation.

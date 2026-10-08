@@ -136,65 +136,170 @@ export async function fetchOpenIssues(
 
 // ---- Teams and projects ------------------------------------------------------------------
 
-const CatalogDataSchema = z.object({
-  teams: z.object({
-    nodes: z.array(
-      z.object({
-        id: z.string(),
-        key: z.string(),
-        name: z.string(),
-        states: z.object({
-          nodes: z.array(z.object({ id: z.string(), name: z.string(), type: z.string() })),
-        }),
-        members: z.object({ nodes: z.array(z.object({ id: z.string(), name: z.string() })) }),
-      }),
-    ),
-  }),
-  projects: z.object({
-    nodes: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        teams: z.object({ nodes: z.array(z.object({ id: z.string() })) }),
-      }),
-    ),
-  }),
-});
+// Linear rejects a single query that nests connections ("Query too complex"), so the
+// catalog is read in small requests: one list of teams, then each team's own connections.
+// Every request stays far below the limit and the shapes below are paginated independently.
 
-const CATALOG_QUERY = `
-  query PaseoLinearCatalog {
-    teams(first: 100) {
-      nodes {
-        id key name
-        states(first: 100) { nodes { id name type } }
-        members(first: 100) { nodes { id name } }
-      }
-    }
-    projects(first: 100) {
-      nodes { id name teams(first: 100) { nodes { id } } }
+const PageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() });
+
+function connection<T extends z.ZodType>(node: T) {
+  return z.object({ nodes: z.array(node), pageInfo: PageInfoSchema });
+}
+
+const TeamSchema = z.object({ id: z.string(), key: z.string(), name: z.string() });
+const StateSchema = z.object({ id: z.string(), name: z.string(), type: z.string() });
+const MemberSchema = z.object({ id: z.string(), name: z.string() });
+const ProjectSchema = z.object({ id: z.string(), name: z.string() });
+
+const TEAMS_QUERY = `
+  query PaseoLinearTeams($after: String) {
+    teams(first: 100, after: $after) {
+      nodes { id key name }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
 
-export async function fetchCatalog(options: LinearOptions): Promise<Catalog> {
-  const data = await linearRequest(options, CATALOG_QUERY, {}, CatalogDataSchema);
+const TEAM_DETAIL_QUERY = `
+  query PaseoLinearTeamDetail($id: String!) {
+    team(id: $id) {
+      states(first: 100) { nodes { id name type } pageInfo { hasNextPage endCursor } }
+      members(first: 100) { nodes { id name } pageInfo { hasNextPage endCursor } }
+      projects(first: 100) { nodes { id name } pageInfo { hasNextPage endCursor } }
+    }
+  }
+`;
+
+const TeamDetailSchema = z.object({
+  team: z.object({
+    states: connection(StateSchema),
+    members: connection(MemberSchema),
+    projects: connection(ProjectSchema),
+  }),
+});
+
+type TeamConnection = "states" | "members" | "projects";
+
+const TEAM_PAGE_FIELDS: Record<TeamConnection, string> = {
+  states: "id name type",
+  members: "id name",
+  projects: "id name",
+};
+
+/** The next page of one team connection, used only when the first 100 were not enough. */
+function teamPageQuery(name: TeamConnection): string {
+  return `
+    query PaseoLinearTeam_${name}($id: String!, $after: String) {
+      team(id: $id) {
+        ${name}(first: 100, after: $after) {
+          nodes { ${TEAM_PAGE_FIELDS[name]} }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  `;
+}
+
+const CATALOG_CONCURRENCY = 4;
+
+type Page<T> = { nodes: T[]; pageInfo: z.output<typeof PageInfoSchema> };
+
+/** Follows a connection past its first page, up to PAGE_LIMIT pages in all. */
+async function readRemainingPages<T>(
+  first: Page<T>,
+  fetchPage: (after: string) => Promise<Page<T>>,
+): Promise<T[]> {
+  const nodes = [...first.nodes];
+  let { hasNextPage, endCursor } = first.pageInfo;
+  for (let page = 1; page < PAGE_LIMIT && hasNextPage && endCursor; page += 1) {
+    const next = await fetchPage(endCursor);
+    nodes.push(...next.nodes);
+    ({ hasNextPage, endCursor } = next.pageInfo);
+  }
+  return nodes;
+}
+
+async function readTeams(options: LinearOptions): Promise<z.output<typeof TeamSchema>[]> {
+  const teams: z.output<typeof TeamSchema>[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < PAGE_LIMIT; page += 1) {
+    const data: { teams: z.output<ReturnType<typeof connection<typeof TeamSchema>>> } =
+      await linearRequest(
+        options,
+        TEAMS_QUERY,
+        { after },
+        z.object({ teams: connection(TeamSchema) }),
+      );
+    teams.push(...data.teams.nodes);
+    if (!data.teams.pageInfo.hasNextPage || !data.teams.pageInfo.endCursor) break;
+    after = data.teams.pageInfo.endCursor;
+  }
+  return teams;
+}
+
+async function readTeamDetail(options: LinearOptions, team: z.output<typeof TeamSchema>) {
+  const data = await linearRequest(options, TEAM_DETAIL_QUERY, { id: team.id }, TeamDetailSchema);
+  const more = <T extends z.ZodType>(name: TeamConnection, node: T, first: Page<z.output<T>>) =>
+    readRemainingPages(first, async (after) => {
+      const page = await linearRequest(
+        options,
+        teamPageQuery(name),
+        { id: team.id, after },
+        z.object({ team: z.object({ [name]: connection(node) }) }),
+      );
+      return (page.team as Record<TeamConnection, Page<z.output<T>>>)[name];
+    });
   return {
-    teams: data.teams.nodes
-      .map((team) => ({
-        id: team.id,
-        key: team.key,
-        name: team.name,
-        states: team.states.nodes,
-        members: [...team.members.nodes].sort((a, b) => a.name.localeCompare(b.name)),
+    team,
+    states: await more("states", StateSchema, data.team.states),
+    members: await more("members", MemberSchema, data.team.members),
+    projects: await more("projects", ProjectSchema, data.team.projects),
+  };
+}
+
+/** Runs the work for every item with at most `limit` requests in flight. */
+async function mapLimited<T, R>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await work(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+export async function fetchCatalog(options: LinearOptions): Promise<Catalog> {
+  const teams = await readTeams(options);
+  const details = await mapLimited(teams, CATALOG_CONCURRENCY, (team) =>
+    readTeamDetail(options, team),
+  );
+
+  const projects = new Map<string, { id: string; name: string; teamIds: string[] }>();
+  for (const detail of details) {
+    for (const project of detail.projects) {
+      const entry = projects.get(project.id) ?? { ...project, teamIds: [] };
+      if (!entry.teamIds.includes(detail.team.id)) entry.teamIds.push(detail.team.id);
+      projects.set(project.id, entry);
+    }
+  }
+
+  return {
+    teams: details
+      .map(({ team, states, members }) => ({
+        ...team,
+        states,
+        members: [...members].sort((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    projects: data.projects.nodes
-      .map((project) => ({
-        id: project.id,
-        name: project.name,
-        teamIds: project.teams.nodes.map((team) => team.id),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+    projects: [...projects.values()].sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
