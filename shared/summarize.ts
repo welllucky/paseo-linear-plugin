@@ -10,9 +10,11 @@ export interface RawIssue {
   updatedAt: string;
   state: { name: string; type: string };
   assignee: { name: string } | null;
+  team?: { name: string } | null;
+  project?: { name: string } | null;
 }
 
-const RECENT_LIMIT = 10;
+const RECENT_LIMIT = 25;
 const UNASSIGNED = "Unassigned";
 
 function tally<T>(items: T[], key: (item: T) => string): Map<string, number> {
@@ -61,6 +63,8 @@ export function summarize(
       state: issue.state.name,
       priority: issue.priorityLabel,
       assignee: issue.assignee?.name ?? null,
+      team: issue.team?.name ?? null,
+      project: issue.project?.name ?? null,
       updatedAt: issue.updatedAt,
     }));
 

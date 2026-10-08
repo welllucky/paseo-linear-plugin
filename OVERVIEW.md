@@ -1,4 +1,4 @@
-Linear dashboard shows a read-only summary of your open Linear issues inside Paseo. It adds a Linear item to the sidebar that opens a screen with the total of open issues, counts by state, by priority and by assignee, and the ten most recently updated issues. Each recent issue opens in Linear.
+Linear dashboard is a reduced, interactive Linear client inside Paseo. A Linear item in the sidebar opens a screen with open-issue totals, counts by state, priority and assignee, team and project filters, and the 25 most recently updated issues. Selecting an issue shows its description, state, priority, assignee, team, project, dates, comments and attachments, and lets you change the state, priority, assignee, title and description.
 
 ## Setup
 
@@ -6,17 +6,21 @@ The plugin reads a Linear personal API key from the `LINEAR_API_KEY` environment
 
 Requires Paseo 0.11.0 or later and the Enable plugins switch turned on. It runs on desktop, browser and mobile clients.
 
-## What it reads and sends
+## Permissions
 
-The daemon sends one GraphQL query to `https://api.linear.app/graphql` per refresh, using the key. The key stays on the daemon; the app only receives the computed summary. The plugin never creates, edits or deletes anything in Linear.
+The daemon sends GraphQL requests to `https://api.linear.app/graphql` using the key: queries for issues, teams, projects, comments and attachments, and the `issueUpdate` mutation when you change a field. The key stays on the daemon; the app only receives results. The plugin never creates or deletes issues and never edits comments. What Linear allows is decided by the key.
 
 ## Limits
 
 - Only open issues are counted, meaning every state except completed and canceled.
 - At most 500 issues are read per refresh, the most recently updated first. When more exist, the total is shown with a plus sign and a note.
 - Data loads when the screen opens and when you press Refresh. There is no background sync or polling.
-- All teams visible to the key are included. There is no team filter.
-- Errors from Linear (rejected key, rate limit) are shown on the screen.
+- Teams, projects, states and members load up to 100 entries each. Comments and attachments load up to 50 each, and the screen says when more exist.
+- Assignee choices are the members of the issue's team.
+- Attachments with a non-http(s) address are listed but cannot be opened.
+- Comments are read-only; there is no file upload or issue creation.
+- Errors from Linear (rejected key, rate limit, invalid change) are shown on the screen and the issue stays unchanged.
+- Tests mock `fetch`; the plugin has not been run against a live workspace.
 
 ## Development
 
@@ -24,6 +28,8 @@ The daemon sends one GraphQL query to `https://api.linear.app/graphql` per refre
 npm install
 npm run typecheck
 npm test
+npm run check
+npm run audit:mobile
 paseo plugin reload linear-dashboard
 ```
 

@@ -1,31 +1,64 @@
 {
-  "name": "linear-dashboard",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@welllucky/paseo-linear-plugin",
+  "version": "0.0.0-development",
   "files": [
     "paseo-plugin.json",
     "OVERVIEW.md",
-    "index.client.ts",
+    "README.md",
     "index.client.tsx",
     "index.server.ts",
-    "index.server.tsx",
     "client/",
     "server/",
     "shared/"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test shared/summarize.test.ts"
+    "test": "node --import tsx --test shared/*.test.ts server/*.test.ts",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "audit:mobile": "! rg -n 'document\\.|window\\.|localStorage|navigator\\.|<[a-z]+[ >]|className=|onClick=' client/ --glob '!client/web.ts'",
+    "verify": "npm run typecheck && npm test && npm run check && npm run audit:mobile",
+    "prepare": "lefthook install || true",
+    "release": "semantic-release"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@getpaseo/plugin": "0.11.0",
     "@tanstack/react-query": "^5.90.11",
+    "@types/node": "^22.0.0",
     "@types/react": "~19.2.0",
+    "lefthook": "^2.2.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "semantic-release": "^25.0.9",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.3",
-    "zod": "^4.4.3",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.20.0"
+    "zod": "^4.4.3"
+  },
+  "description": "Interactive, reduced Linear view for Paseo",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/welllucky/paseo-linear-plugin.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/npm",
+      "@semantic-release/github"
+    ]
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
