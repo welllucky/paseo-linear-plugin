@@ -1,7 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import type { DashboardSummary, IssueRow } from "../shared/dashboard";
-import type { Styles } from "../shared/styles-type";
-import type { PluginTheme } from "./styles";
+import type { PluginTheme, Styles } from "./styles";
 
 export function Chip({
   label,

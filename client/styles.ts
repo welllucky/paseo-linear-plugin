@@ -109,3 +109,10 @@ export function useStyles(theme: PluginTheme, compact: boolean) {
     };
   }, [theme, compact]);
 }
+
+// The type lives here, not in shared/: the shared bundle cannot import client-only modules.
+// The generic is split across lines so the mobile audit does not read it as an HTML tag.
+// biome-ignore format: keep the angle bracket at the end of the line
+export type Styles = ReturnType<
+  typeof useStyles
+>;
