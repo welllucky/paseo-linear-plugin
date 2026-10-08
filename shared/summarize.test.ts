@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type RawIssue, summarize } from "./summarize";
+import { groupIssuesByState, type RawIssue, summarize } from "./summarize";
 
 function issue(n: number, over: Partial<RawIssue> = {}): RawIssue {
   return {
@@ -58,4 +58,58 @@ test("handles an empty list and keeps the truncated flag", () => {
   assert.equal(s.total, 0);
   assert.equal(s.truncated, true);
   assert.deepEqual(s.byState, []);
+});
+
+test("groups issues by summary state order and preserves issue order", () => {
+  const summary = summarize(
+    [
+      issue(1, { state: { name: "Todo", type: "unstarted" } }),
+      issue(2, { state: { name: "In Progress", type: "started" } }),
+      issue(3, { state: { name: "Todo", type: "unstarted" } }),
+    ],
+    { truncated: false, now: new Date(0) },
+  );
+  const groups = groupIssuesByState(summary.recent, summary.byState);
+  assert.deepEqual(
+    groups.map((group) => [group.name, group.type, group.issues.map((item) => item.identifier)]),
+    [
+      ["Todo", "unstarted", ["ENG-3", "ENG-1"]],
+      ["In Progress", "started", ["ENG-2"]],
+    ],
+  );
+});
+
+test("puts an unexpected state after the declared summary order", () => {
+  const issues = [
+    {
+      id: "1",
+      identifier: "ENG-1",
+      title: "Issue 1",
+      url: "https://linear.app/x/issue/ENG-1",
+      state: "Other",
+      priority: "Low",
+      assignee: null,
+      team: null,
+      project: null,
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    },
+    {
+      id: "2",
+      identifier: "ENG-2",
+      title: "Issue 2",
+      url: "https://linear.app/x/issue/ENG-2",
+      state: "Todo",
+      priority: "Low",
+      assignee: null,
+      team: null,
+      project: null,
+      updatedAt: "2026-10-02T00:00:00.000Z",
+    },
+  ];
+  const groups = groupIssuesByState(issues, [{ name: "Todo", type: "unstarted" }]);
+  assert.deepEqual(
+    groups.map((group) => group.name),
+    ["Todo", "Other"],
+  );
+  assert.equal(groups[1]?.type, "unknown");
 });

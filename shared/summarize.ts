@@ -1,4 +1,4 @@
-import type { DashboardSummary } from "./dashboard";
+import type { DashboardSummary, IssueRow } from "./dashboard";
 
 export interface RawIssue {
   id: string;
@@ -16,6 +16,40 @@ export interface RawIssue {
 
 const RECENT_LIMIT = 25;
 const UNASSIGNED = "Unassigned";
+
+export interface IssueGroup {
+  name: string;
+  type: string;
+  issues: IssueRow[];
+}
+
+/** Groups the already ordered issue list using the summary's deterministic state order. */
+export function groupIssuesByState(
+  issues: IssueRow[],
+  stateOrder: Pick<DashboardSummary["byState"][number], "name" | "type">[],
+): IssueGroup[] {
+  const grouped = new Map<string, IssueGroup>();
+  for (const issue of issues) {
+    const group = grouped.get(issue.state);
+    if (group) {
+      group.issues.push(issue);
+    } else {
+      grouped.set(issue.state, { name: issue.state, type: "unknown", issues: [issue] });
+    }
+  }
+
+  const ordered = stateOrder
+    .map((state) => {
+      const group = grouped.get(state.name);
+      if (!group) return null;
+      group.type = state.type;
+      grouped.delete(state.name);
+      return group;
+    })
+    .filter((group): group is IssueGroup => group !== null);
+
+  return [...ordered, ...grouped.values()];
+}
 
 function tally<T>(items: T[], key: (item: T) => string): Map<string, number> {
   const counts = new Map<string, number>();
