@@ -219,6 +219,7 @@ export function DashboardView({
             <View style={[styles.panel, styles.listPane]}>
               <IssueList
                 issues={result.data.recent}
+                stateOrder={result.data.byState}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 styles={styles}

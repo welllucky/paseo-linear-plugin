@@ -39,3 +39,11 @@ test("the client entry registers the panel, the screen and the settings screen",
   const screen = /function DashboardScreen[\s\S]*?\n {2}\}/.exec(source)?.[0] ?? "";
   assert.ok(screen.includes("DashboardView") && !screen.includes("binding"));
 });
+
+test("the issue list keeps grouped status headers in the compact surface", async () => {
+  const source = await readFile(new URL("../client/parts.tsx", import.meta.url), "utf8");
+  assert.match(source, /groupIssuesByState\(issues, stateOrder\)/);
+  assert.match(source, /styles\.groupHeader/);
+  assert.match(source, /group\.name/);
+  assert.match(source, /group\.issues\.length/);
+});

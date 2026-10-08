@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { DashboardSummary, IssueRow } from "../shared/dashboard";
+import { groupIssuesByState } from "../shared/summarize";
 import type { PluginTheme, Styles } from "./styles";
 
 const HIT_SLOP = { top: 6, bottom: 6, left: 4, right: 4 } as const;
@@ -209,6 +210,7 @@ export function Overview({
 
 export function IssueList({
   issues,
+  stateOrder,
   selectedId,
   onSelect,
   styles,
@@ -216,12 +218,14 @@ export function IssueList({
   emptyHint,
 }: {
   issues: IssueRow[];
+  stateOrder: DashboardSummary["byState"];
   selectedId: string | null;
   onSelect: (id: string) => void;
   styles: Styles;
   theme: PluginTheme;
   emptyHint?: ReactNode;
 }) {
+  const groups = groupIssuesByState(issues, stateOrder);
   return (
     <View>
       <View style={[styles.panelRow, styles.headerRow]}>
@@ -236,39 +240,51 @@ export function IssueList({
           {emptyHint}
         </View>
       ) : null}
-      {issues.map((issue) => {
-        const selected = issue.id === selectedId;
-        return (
-          <Pressable
-            key={issue.id}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={`${issue.identifier}, ${issue.title}. ${issue.state}, ${issue.priority}, ${issue.assignee ?? "unassigned"}. Shows details`}
-            style={[styles.row, selected ? styles.rowSelected : null]}
-            onPress={() => onSelect(issue.id)}
-          >
-            <View
-              style={[
-                styles.rail,
-                {
-                  backgroundColor: selected
-                    ? theme.colors.accent
-                    : priorityColor(issue.priority, theme),
-                },
-              ]}
-            />
-            <View style={styles.rowBody}>
-              <Text numberOfLines={1} style={styles.rowTitle}>
-                {issue.title}
-              </Text>
-              <Text numberOfLines={1} style={styles.rowId}>
-                {issue.identifier} · {issue.state} · {issue.priority} ·{" "}
-                {issue.assignee ?? "Unassigned"}
+      {groups.map((group) => (
+        <View key={group.name}>
+          <View style={styles.groupHeader} accessibilityRole="header">
+            <View style={styles.groupTitle}>
+              <View style={[styles.dot, { backgroundColor: stateColor(group.type, theme) }]} />
+              <Text numberOfLines={1} style={styles.groupName}>
+                {group.name}
               </Text>
             </View>
-          </Pressable>
-        );
-      })}
+            <Text style={styles.small}>{group.issues.length}</Text>
+          </View>
+          {group.issues.map((issue) => {
+            const selected = issue.id === selectedId;
+            return (
+              <Pressable
+                key={issue.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${issue.identifier}, ${issue.title}. ${issue.state}, ${issue.priority}, ${issue.assignee ?? "unassigned"}. Shows details`}
+                style={[styles.row, selected ? styles.rowSelected : null]}
+                onPress={() => onSelect(issue.id)}
+              >
+                <View
+                  style={[
+                    styles.rail,
+                    {
+                      backgroundColor: selected
+                        ? theme.colors.accent
+                        : priorityColor(issue.priority, theme),
+                    },
+                  ]}
+                />
+                <View style={styles.rowBody}>
+                  <Text numberOfLines={1} style={styles.rowTitle}>
+                    {issue.title}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.rowId}>
+                    {issue.identifier} · {issue.priority} · {issue.assignee ?? "Unassigned"}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
