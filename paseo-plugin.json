@@ -6,5 +6,5 @@
     "paseo": ">=0.11.0"
   },
   "name": "Linear dashboard",
-  "description": "Read-only summary of open Linear issues by state, priority and assignee."
+  "description": "Browse open Linear issues and edit state, priority, assignee, title and description."
 }
