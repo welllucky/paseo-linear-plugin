@@ -6,5 +6,5 @@
     "paseo": ">=0.11.0"
   },
   "name": "Linear dashboard",
-  "description": "Browse open Linear issues and edit state, priority, assignee, title and description."
+  "description": "Browse open Linear issues in a screen, workspace tab or Explorer panel, read comments and activity inline, and edit state, priority, assignee, title and description."
 }

@@ -88,6 +88,15 @@ export const issueDetail = z.object({
     }),
   ),
   attachmentsTruncated: z.boolean(),
+  /** Recent status, priority, assignee and title changes, newest first. */
+  activity: z.array(
+    z.object({
+      id: z.string(),
+      createdAt: z.string(),
+      actor: z.string().nullable(),
+      summary: z.string(),
+    }),
+  ),
 });
 
 export const issueUpdate = z
@@ -108,6 +117,18 @@ export const issueUpdate = z
     { message: "Nothing to update" },
   );
 
+export const tokenSource = z.enum(["settings", "environment", "none"]);
+
+/** All the client ever learns about the credential: whether one exists and where it came from. */
+export const tokenStatus = z.object({ configured: z.boolean(), source: tokenSource });
+
+export const tokenResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ready"), data: tokenStatus }),
+  z.object({ status: z.literal("error"), message: z.string() }),
+]);
+
+export const connectionCheck = z.object({ viewer: z.string() });
+
 export const PRIORITIES = [
   { value: 0, label: "No priority" },
   { value: 1, label: "Urgent" },
@@ -122,6 +143,8 @@ export type Catalog = z.infer<typeof catalog>;
 export type IssueDetail = z.infer<typeof issueDetail>;
 export type IssueFilter = z.infer<typeof issueFilter>;
 export type IssueUpdate = z.infer<typeof issueUpdate>;
+export type TokenSource = z.infer<typeof tokenSource>;
+export type TokenStatus = z.infer<typeof tokenStatus>;
 
 export const getDashboardRpc = defineRpc({
   name: "linear-dashboard.summary",
@@ -146,3 +169,37 @@ export const updateIssueRpc = defineRpc({
   input: issueUpdate,
   output: result(issueDetail),
 });
+
+export const getTokenStatusRpc = defineRpc({
+  name: "linear-dashboard.token.status",
+  input: z.object({}),
+  output: tokenResult,
+});
+
+/** The token travels client to daemon once on save. No RPC returns it. */
+export const saveTokenRpc = defineRpc({
+  name: "linear-dashboard.token.save",
+  input: z.object({ token: z.string() }),
+  output: tokenResult,
+});
+
+export const clearTokenRpc = defineRpc({
+  name: "linear-dashboard.token.clear",
+  input: z.object({}),
+  output: tokenResult,
+});
+
+export const checkConnectionRpc = defineRpc({
+  name: "linear-dashboard.token.check",
+  input: z.object({}),
+  output: result(connectionCheck),
+});
+
+/** Plain-language status line for the settings screen. */
+export function describeTokenStatus(status: TokenStatus): string {
+  if (status.source === "settings") return "A key is saved on the daemon.";
+  if (status.source === "environment") {
+    return "No saved key. The daemon is using LINEAR_API_KEY from its environment.";
+  }
+  return "No key is set.";
+}

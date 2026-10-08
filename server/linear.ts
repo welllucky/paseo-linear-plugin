@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Catalog, IssueDetail, IssueFilter, IssueUpdate } from "../shared/dashboard";
 import type { RawIssue } from "../shared/summarize";
 import { safeExternalUrl } from "../shared/urls";
+import { HISTORY_FIELDS, HistorySchema, toActivity } from "./activity";
 
 const ENDPOINT = "https://api.linear.app/graphql";
 
@@ -19,7 +20,8 @@ export class LinearApiError extends Error {
 }
 
 function describeHttpFailure(status: number): string {
-  if (status === 401 || status === 403) return "Linear rejected LINEAR_API_KEY";
+  if (status === 401 || status === 403)
+    return "Linear rejected the API key. Check it in plugin settings";
   if (status === 429) return "Linear rate limit reached. Try again shortly";
   return `Linear API request failed with HTTP ${status}`;
 }
@@ -51,6 +53,17 @@ async function linearRequest<T extends z.ZodType>(
   const parsed = schema.safeParse(body.data);
   if (!parsed.success) throw new LinearApiError("Linear returned data in an unexpected shape");
   return parsed.data;
+}
+
+/** Confirms the key works and names whose key it is. */
+export async function fetchViewer(options: LinearOptions): Promise<{ viewer: string }> {
+  const data = await linearRequest(
+    options,
+    "query PaseoLinearViewer { viewer { name } }",
+    {},
+    z.object({ viewer: z.object({ name: z.string() }) }),
+  );
+  return { viewer: data.viewer.name };
 }
 
 // ---- Open issues (read-only) -------------------------------------------------------------
@@ -225,6 +238,7 @@ const DetailSchema = z.object({
     ),
     pageInfo: z.object({ hasNextPage: z.boolean() }),
   }),
+  history: z.object({ nodes: z.array(HistorySchema) }).nullish(),
 });
 
 const ISSUE_FIELDS = `
@@ -235,6 +249,7 @@ const ISSUE_FIELDS = `
   project { id name }
   comments(first: 50) { nodes { id body createdAt user { name } } pageInfo { hasNextPage } }
   attachments(first: 50) { nodes { id title subtitle sourceType url } pageInfo { hasNextPage } }
+  ${HISTORY_FIELDS}
 `;
 
 const ISSUE_QUERY = `query PaseoLinearIssue($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`;
@@ -276,6 +291,7 @@ function toDetail(raw: z.output<typeof DetailSchema>): IssueDetail {
       url: safeExternalUrl(attachment.url),
     })),
     attachmentsTruncated: raw.attachments.pageInfo.hasNextPage,
+    activity: toActivity(raw.history?.nodes ?? []),
   };
 }
 

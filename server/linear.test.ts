@@ -1,60 +1,14 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
-import { changeIssue, getCatalog, getDashboard, getIssue } from "./dashboard";
-import { buildIssueFilter, fetchOpenIssues, LinearApiError, updateIssue } from "./linear";
-
-type Call = { query: string; variables: Record<string, any>; auth: string | null };
-
-function mockFetch(respond: (call: Call) => unknown, status = 200) {
-  const calls: Call[] = [];
-  const request = (async (_url: string, init: RequestInit) => {
-    const body = JSON.parse(String(init.body));
-    const headers = init.headers as Record<string, string>;
-    const call = {
-      query: body.query,
-      variables: body.variables,
-      auth: headers.Authorization ?? null,
-    };
-    calls.push(call);
-    return new Response(JSON.stringify(respond(call)), { status });
-  }) as typeof fetch;
-  return { calls, request };
-}
-
-const detail = (over: Record<string, unknown> = {}) => ({
-  id: "i1",
-  identifier: "ENG-1",
-  title: "Title",
-  description: "Body",
-  url: "https://linear.app/x/issue/ENG-1",
-  priority: 2,
-  priorityLabel: "High",
-  createdAt: "2026-10-01T00:00:00.000Z",
-  updatedAt: "2026-10-02T00:00:00.000Z",
-  dueDate: null,
-  state: { id: "s1", name: "Todo", type: "unstarted" },
-  assignee: null,
-  team: { id: "t1", key: "ENG", name: "Eng" },
-  project: null,
-  comments: {
-    nodes: [{ id: "c1", body: "hi", createdAt: "2026-10-02T00:00:00.000Z", user: null }],
-    pageInfo: { hasNextPage: false },
-  },
-  attachments: {
-    nodes: [
-      { id: "a1", title: "Spec", subtitle: null, sourceType: "figma", url: "https://figma.com/x" },
-      { id: "a2", title: null, subtitle: null, sourceType: null, url: "javascript:alert(1)" },
-    ],
-    pageInfo: { hasNextPage: true },
-  },
-  ...over,
-});
-
-const realFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  delete process.env.LINEAR_API_KEY;
-});
+import { test } from "node:test";
+import {
+  buildIssueFilter,
+  fetchIssue,
+  fetchOpenIssues,
+  fetchViewer,
+  LinearApiError,
+  updateIssue,
+} from "./linear";
+import { detail, mockFetch } from "./test-helpers";
 
 test("filter adds team and project but always excludes closed states", () => {
   assert.deepEqual(buildIssueFilter({ teamId: "t", projectId: "p" }), {
@@ -118,69 +72,47 @@ test("updateIssue rejects an empty title and unsuccessful payloads", async () =>
   );
 });
 
-test("handlers report not_configured without calling Linear", async () => {
-  const { calls, request } = mockFetch(() => ({}));
-  globalThis.fetch = request;
-  assert.deepEqual(await getDashboard({}), { status: "not_configured" });
-  assert.deepEqual(await changeIssue({ id: "i", priority: 1 }), { status: "not_configured" });
-  assert.equal(calls.length, 0);
-});
-
-test("handlers return catalog and issue detail", async () => {
-  process.env.LINEAR_API_KEY = "lin_api_secret";
-  const { request } = mockFetch((call) =>
-    call.query.includes("PaseoLinearCatalog")
-      ? {
-          data: {
-            teams: {
-              nodes: [
-                {
-                  id: "t1",
-                  key: "ENG",
-                  name: "Eng",
-                  states: { nodes: [{ id: "s1", name: "Todo", type: "unstarted" }] },
-                  members: {
-                    nodes: [
-                      { id: "u2", name: "Zed" },
-                      { id: "u1", name: "Ana" },
-                    ],
-                  },
-                },
-              ],
+test("fetchIssue turns history into readable activity, newest first", async () => {
+  const { request } = mockFetch(() => ({
+    data: {
+      issue: detail({
+        history: {
+          nodes: [
+            {
+              id: "h1",
+              createdAt: "2026-10-02T10:00:00.000Z",
+              actor: { name: "Ana" },
+              fromState: { name: "Todo" },
+              toState: { name: "In Progress" },
             },
-            projects: { nodes: [{ id: "p1", name: "Proj", teams: { nodes: [{ id: "t1" }] } }] },
-          },
-        }
-      : { data: { issue: detail() } },
+            {
+              id: "h0",
+              createdAt: "2026-10-03T10:00:00.000Z",
+              actor: null,
+              fromPriority: 2,
+              toPriority: 1,
+              toAssignee: { name: "Zed" },
+            },
+            { id: "noise", createdAt: "2026-10-04T10:00:00.000Z" },
+          ],
+        },
+      }),
+    },
+  }));
+  const issue = await fetchIssue({ apiKey: "k", request, id: "ENG-1" });
+  assert.deepEqual(
+    issue.activity.map((entry) => [entry.id, entry.actor, entry.summary]),
+    [
+      ["h0", null, "Priority High → Urgent; Assigned to Zed"],
+      ["h1", "Ana", "Status Todo → In Progress"],
+    ],
   );
-  globalThis.fetch = request;
-  const catalog = await getCatalog();
-  assert.equal(catalog.status, "ready");
-  if (catalog.status === "ready") {
-    assert.deepEqual(
-      catalog.data.teams[0].members.map((m) => m.name),
-      ["Ana", "Zed"],
-    );
-    assert.deepEqual(catalog.data.projects[0].teamIds, ["t1"]);
-  }
-  const issue = await getIssue({ id: "ENG-1" });
-  assert.equal(issue.status, "ready");
+  assert.equal(issue.description, "Body");
+  assert.equal(issue.comments.length, 1);
 });
 
-test("errors are clear and never contain the key", async () => {
-  process.env.LINEAR_API_KEY = "lin_api_secret";
-  globalThis.fetch = mockFetch(() => ({}), 401).request;
-  const rejected = await changeIssue({ id: "i", priority: 1 });
-  assert.deepEqual(rejected, { status: "error", message: "Linear rejected LINEAR_API_KEY" });
-
-  globalThis.fetch = mockFetch(() => ({ errors: [{ message: "Invalid stateId" }] })).request;
-  const gql = await changeIssue({ id: "i", stateId: "bad" });
-  assert.deepEqual(gql, { status: "error", message: "Invalid stateId" });
-
-  globalThis.fetch = (async () => {
-    throw new Error("socket lin_api_secret");
-  }) as typeof fetch;
-  const net = await getIssue({ id: "i" });
-  assert.equal(net.status, "error");
-  assert.ok(!JSON.stringify(net).includes("lin_api_secret"));
+test("fetchViewer names whose key it is", async () => {
+  const { calls, request } = mockFetch(() => ({ data: { viewer: { name: "Ana" } } }));
+  assert.deepEqual(await fetchViewer({ apiKey: "k", request }), { viewer: "Ana" });
+  assert.match(calls[0].query, /viewer/);
 });
