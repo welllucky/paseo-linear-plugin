@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -73,4 +73,36 @@ test("the default location is inside the daemon home", () => {
     defaultTokenPath({ PASEO_HOME: "/data/paseo" }),
     "/data/paseo/plugin-data/linear-dashboard/token",
   );
+});
+
+test("concurrent saves do not clobber each other and leave the last request installed", async () => {
+  const path = join(dir, "token");
+  const store = createCredentialStore({ path, env: {} });
+  const tokens = Array.from({ length: 12 }, (_, index) => `lin_api_token_${index}`);
+  const results = await Promise.allSettled(tokens.map((token) => store.save(token)));
+  assert.deepEqual(
+    results.filter((result) => result.status === "rejected"),
+    [],
+  );
+  assert.deepEqual(await store.resolve(), { token: tokens[tokens.length - 1], source: "settings" });
+  assert.deepEqual(await readdir(dir), ["token"]);
+});
+
+test("a save and a clear started together finish in call order", async () => {
+  const path = join(dir, "token");
+  const store = createCredentialStore({ path, env: {} });
+  await Promise.all([store.save("lin_api_first"), store.clear(), store.save("lin_api_last")]);
+  assert.deepEqual(await store.resolve(), { token: "lin_api_last", source: "settings" });
+  await Promise.all([store.save("lin_api_again"), store.clear()]);
+  assert.equal(await store.resolve(), null);
+  assert.deepEqual(await readdir(dir), []);
+});
+
+test("a failed save does not block the ones after it", async () => {
+  const store = createCredentialStore({ path: join(dir, "token"), env: {} });
+  const bad = store.save("not valid");
+  const good = store.save("lin_api_good");
+  await assert.rejects(bad, InvalidTokenError);
+  await good;
+  assert.deepEqual(await store.resolve(), { token: "lin_api_good", source: "settings" });
 });

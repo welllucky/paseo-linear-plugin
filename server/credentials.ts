@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -76,6 +77,15 @@ export function createCredentialStore(
     }
   }
 
+  // Saves and clears run one at a time in call order, so the last request wins and the
+  // status a caller reads afterwards reflects the file as that caller left it.
+  let queue: Promise<unknown> = Promise.resolve();
+  function serialized<T>(work: () => Promise<T>): Promise<T> {
+    const run = queue.then(work, work);
+    queue = run.catch(() => {});
+    return run;
+  }
+
   return {
     async resolve() {
       const saved = await readSaved();
@@ -84,15 +94,24 @@ export function createCredentialStore(
       return fromEnv ? { token: fromEnv, source: "environment" } : null;
     },
     async save(raw) {
+      // Validate before queueing so a bad token fails fast and never delays the others.
       const token = normalizeToken(raw);
-      await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-      const temporary = `${path}.${process.pid}.tmp`;
-      await writeFile(temporary, `${token}\n`, { mode: 0o600 });
-      await chmod(temporary, 0o600);
-      await rename(temporary, path);
+      return serialized(async () => {
+        await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+        // A name unique to this call: overlapping writers must never share a temporary file.
+        const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+        try {
+          await writeFile(temporary, `${token}\n`, { mode: 0o600 });
+          await chmod(temporary, 0o600);
+          await rename(temporary, path);
+        } catch (error) {
+          await rm(temporary, { force: true });
+          throw error;
+        }
+      });
     },
-    async clear() {
-      await rm(path, { force: true });
+    clear() {
+      return serialized(() => rm(path, { force: true }));
     },
   };
 }
