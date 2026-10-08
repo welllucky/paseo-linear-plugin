@@ -82,7 +82,7 @@ The plugin runs with the daemon's permissions. It needs outbound HTTPS access to
 
 - Only open issues are listed, meaning every state except completed and canceled. At most 500 are read per refresh.
 - Activity shows up to 25 recent history entries and only the changes listed above. Comments are read-only. The plugin does not create or edit comments, upload files, or create issues.
-- Teams, projects, states and members each load up to 100 entries.
+- The catalog is read in small requests (teams, then each team's states, members and projects), so Linear's query complexity limit is never reached. Each list loads up to 500 entries, 100 per page.
 - The saved key applies to the whole daemon, so every client of that host shares one Linear account.
 - Assignee choices are the members of the issue's team.
 - There is no sync, notification or offline mode.
