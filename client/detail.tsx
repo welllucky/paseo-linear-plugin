@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import type { Catalog, IssueDetail, IssueUpdate } from "../shared/dashboard";
 import { getIssueRpc, PRIORITIES, updateIssueRpc } from "../shared/dashboard";
-import type { Styles } from "../shared/styles-type";
 import { safeExternalUrl } from "../shared/urls";
 import { Chip, ErrorNotice } from "./parts";
-import type { PluginTheme } from "./styles";
+import type { PluginTheme, Styles } from "./styles";
 import { openExternal } from "./web";
 
 const NOT_CONNECTED = "Linear is not connected. Set LINEAR_API_KEY on the daemon.";
