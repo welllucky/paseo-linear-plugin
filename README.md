@@ -1,6 +1,6 @@
 # Paseo Linear plugin
 
-A small Linear client for [Paseo](https://paseo.sh). It adds a Linear item to the sidebar. The screen it opens lists your open issues, shows each issue's details, and lets you change a few fields without leaving Paseo.
+A small Linear client for [Paseo](https://paseo.sh). It adds a Linear item to the sidebar, a Linear panel for the workspace and the right-side Explorer, and a settings screen for the API key. The view lists your open issues, shows each issue's details, and lets you change a few fields without leaving Paseo.
 
 The plugin id is `linear-dashboard`. The npm package is `@welllucky/paseo-linear-plugin`.
 
@@ -32,17 +32,31 @@ Releases are also published as `@welllucky/paseo-linear-plugin` on GitHub Packag
 
 Then `npm pack @welllucky/paseo-linear-plugin`, unpack the archive and install that directory with `paseo plugin install`.
 
-## Configure LINEAR_API_KEY
+## Configure the Linear API key
 
 1. In Linear, open Settings, Security and access, and create a personal API key.
-2. Start the Paseo daemon with `LINEAR_API_KEY` set in its environment.
-3. Restart the daemon after any change to the key. Reloading the plugin does not pick up a new value.
+2. In Paseo, open Settings, Plugins, Linear dashboard, Linear (or press Open settings in the plugin when it is not connected).
+3. Paste the key and press Save. Use Test connection to confirm Linear accepts it, and Remove to delete the saved key.
 
-The key is read only by the daemon. It is sent to `https://api.linear.app/graphql` in the `Authorization` header and nowhere else. It is never returned to the app, written to a file or logged. Without a key the screen shows setup instructions.
+The key can come from two places. The daemon picks the first one it finds:
+
+1. The key saved in the plugin settings.
+2. The `LINEAR_API_KEY` environment variable of the daemon process.
+
+So `LINEAR_API_KEY` keeps working as a fallback. Removing the saved key switches back to it. Changing the environment variable needs a daemon restart. Saving or removing a key in the settings takes effect immediately.
+
+The key stays on the daemon machine:
+
+- It is saved in `$PASEO_HOME/plugin-data/linear-dashboard/token` (`~/.paseo/...` when `PASEO_HOME` is unset), in a directory only the daemon user can read (mode 0700, file 0600). It is stored as plain text, like other Paseo host files, not in an encrypted vault.
+- The app sends it once when you press Save. No request returns it: the app only learns whether a key is set and whether it came from the settings or the environment.
+- It goes to `https://api.linear.app/graphql` in the `Authorization` header and nowhere else. It is never logged, and error text is scrubbed of the key and of anything shaped like a Linear key before it reaches the app or the logs.
+- It is not part of Paseo's shared plugin settings document, which every connected client can read.
+
+Without a key the view shows setup instructions.
 
 ## Use
 
-Open the Linear item in the sidebar. The screen loads when it opens and again when you press Refresh. There is no polling or background sync.
+Open Linear from the sidebar item, or add the Linear panel as a tab in a workspace or in the Explorer on the right. The Explorer and tab panel use the stacked layout: the list first, then the selected issue with a Back button. The full screen loads when it opens and again when you press Refresh. There is no polling or background sync.
 
 - **Summary:** the number of open issues and counts by state, priority and assignee.
 - **Teams and projects:** pick a team or project to narrow the summary and the issue list.
@@ -52,13 +66,13 @@ Open the Linear item in the sidebar. The screen loads when it opens and again wh
 
 For the selected issue you can:
 
-- read the description, state, priority, assignee, team, project, dates and the first 50 comments;
+- read the description, state, priority, assignee, team, project, dates, recent activity (status, priority, assignee and title changes) and the first 50 comments, all inline;
 - change the state, priority or assignee with one tap;
 - edit the title and description and save them together;
 - see the first 50 attachments and open one in the browser;
 - open the issue in Linear.
 
-Every change is a separate request from the daemon to Linear. If Linear rejects it, the screen shows Linear's message and the issue stays as it was. Attachments whose address is not http or https are listed but cannot be opened.
+Nothing is bulk or destructive: you cannot delete issues, comments or attachments. Every change is a separate request from the daemon to Linear. If Linear rejects it, the screen shows Linear's message and the issue stays as it was. Attachments whose address is not http or https are listed but cannot be opened.
 
 ## Permissions
 
@@ -67,8 +81,9 @@ The plugin runs with the daemon's permissions. It needs outbound HTTPS access to
 ## Limits
 
 - Only open issues are listed, meaning every state except completed and canceled. At most 500 are read per refresh.
-- Comments are read-only. The plugin does not create or edit comments, upload files, or create issues.
+- Activity shows up to 25 recent history entries and only the changes listed above. Comments are read-only. The plugin does not create or edit comments, upload files, or create issues.
 - Teams, projects, states and members each load up to 100 entries.
+- The saved key applies to the whole daemon, so every client of that host shares one Linear account.
 - Assignee choices are the members of the issue's team.
 - There is no sync, notification or offline mode.
 - The plugin has not been verified against a live Linear workspace. Tests mock `fetch` and never call Linear.

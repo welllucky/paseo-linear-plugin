@@ -9,7 +9,7 @@ import { Chip, ErrorNotice } from "./parts";
 import type { PluginTheme, Styles } from "./styles";
 import { openExternal } from "./web";
 
-const NOT_CONNECTED = "Linear is not connected. Set LINEAR_API_KEY on the daemon.";
+const NOT_CONNECTED = "Linear is not connected. Add an API key in the plugin settings.";
 
 function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "None";
@@ -324,6 +324,18 @@ function IssueBody({
             </Pressable>
           );
         })}
+      </Section>
+
+      <Section label={`Activity (${issue.activity.length})`} styles={styles}>
+        {issue.activity.length === 0 ? <Text style={styles.muted}>No recent changes</Text> : null}
+        {issue.activity.map((entry) => (
+          <View key={entry.id} style={styles.comment} accessible>
+            <Text style={styles.muted}>
+              {entry.actor ?? "Linear"} · {formatDate(entry.createdAt)}
+            </Text>
+            <Text style={styles.body}>{entry.summary}</Text>
+          </View>
+        ))}
       </Section>
 
       <Section

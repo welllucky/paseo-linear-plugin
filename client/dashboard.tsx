@@ -1,4 +1,4 @@
-import type { PluginScreenProps } from "@getpaseo/plugin/client";
+import type { PluginHostProps } from "@getpaseo/plugin/client";
 import { useRpc } from "@getpaseo/plugin/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -16,7 +16,12 @@ const MANUAL = {
   retry: false,
 } as const;
 
-export function DashboardScreen({ theme, layout }: PluginScreenProps) {
+/** The Linear view shared by the full screen and the workspace and Explorer panel. */
+export function DashboardView({
+  theme,
+  layout,
+  onOpenSettings,
+}: Pick<PluginHostProps, "theme" | "layout"> & { onOpenSettings?: () => void }) {
   const getDashboard = useRpc(getDashboardRpc);
   const getCatalog = useRpc(getCatalogRpc);
   const queryClient = useQueryClient();
@@ -97,15 +102,22 @@ export function DashboardScreen({ theme, layout }: PluginScreenProps) {
             Linear is not connected
           </Text>
           <Text style={styles.body}>
-            Create a personal API key in Linear (Settings, Security and access) and start the Paseo
-            daemon with it set in its environment:
+            Add a personal API key from Linear (Settings, Security and access) in the plugin
+            settings. The key stays on the daemon and is never sent back to the app.
           </Text>
-          <Text selectable style={styles.body}>
-            LINEAR_API_KEY=lin_api_...
-          </Text>
+          {onOpenSettings ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open Linear plugin settings"
+              style={styles.button}
+              onPress={onOpenSettings}
+            >
+              <Text style={styles.buttonText}>Open settings</Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.muted}>
-            Restart the daemon after changing the key, then press Refresh. The key stays on the
-            daemon and is never sent to the app.
+            The daemon also falls back to the LINEAR_API_KEY environment variable. Press Refresh
+            after saving a key.
           </Text>
         </View>
       ) : null}
